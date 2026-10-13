@@ -1,0 +1,16 @@
+Вся работы проведена по запросу:
+
+в метадате менял время (главное не присвоить одно и тоже время пакетам)
+менял:
+ ip-адреса в  - internet protocol, sip, sdp
+в sip:
+ user-agent
+ from в части изменения дисплей нейм
+ p-asserted-identety - синхронно с from
+в sdp:
+ owner
+
+отрезал комментарии к пакетам
+
+просил поменять ip-адреса в  - internet protocol
+удалить в метадате id interface (ipchange)
