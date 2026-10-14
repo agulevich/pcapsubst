@@ -1,5 +1,5 @@
 /*! @file    ipchange.cpp
- *  @author  Гулевич Александр Игоревич (mailto:alx_me@mail.ru)
+ *  @author  xxxxxxxxxxxxxxxxxxxxxxxxxx (mailto:xxxxxx@mail.ru)
  *  @ingroup
  *  @brief   Подмена IP в cap-файле
  *
@@ -14,10 +14,11 @@
  *   $ tshark -r capture.pcapng -F pcap -w capture.pcap
  *
  *  Запуск:
- *   ./ipchange /tmp/in.cap -o -t /tmp/out.cap 10.10.43.4:172.18.12.12 's~8634423301~801~' 's~8634663302~802~' 's~10.10.43.4~172.18.12.12~'
+ *   ./ipchange /tmp/in.cap -o -t /tmp/out.cap 10.10.43.4:172.18.12.12 's~8634423301~801~' 's~8634663302~802~' 's~10.10.43.4~172.18.12.12~' 'm~00:30:64:3b:04:a7~ff:ff:ff:ff:ff:ff~'
  */
 
 // PcapPlusPlus
+#include <EthLayer.h>
 #include <IPv4Layer.h>
 #include <Packet.h>
 #include <PcapFileDevice.h>
@@ -25,6 +26,7 @@
 #include <UdpLayer.h>
 // stl
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <ctime>
 #include <functional>
@@ -38,7 +40,9 @@
 #define DOUT( LINE ) (std::cout << LINE << '\n')
 #define EOUT( LINE ) (std::cerr << LINE << '\n')
 
-template< typename TVAL>
+using mac_t = std::array< uint8_t,6 >;
+
+template< typename TVAL >
 struct TValSubst
 {
  using val_t = TVAL;
@@ -50,7 +54,8 @@ struct TValSubst
 }; /* struct TValSubst */
 
 using SModIP  = TValSubst< uint32_t >;   /*!< @brief Замена IP */
-using SModStr = TValSubst< std::string >;/*!< @brief Замена строки */
+using SModSTR = TValSubst< std::string >;/*!< @brief Замена строки */
+using SModMAC = TValSubst< mac_t >;   /*!< @brief Замена MAC */
 
 bool
 ParseIP( std::string const __in,uint32_t & __out )
@@ -69,7 +74,11 @@ ParsePair( std::string const & __in,SModIP & __out )
  do
  {
   auto pos = __in.find( ':' );
-  if ( pos == std::string::npos ) break;
+  if ( pos == std::string::npos )
+  {
+   EOUT( "subst IP lost" );
+   break;
+  }
 
   std::string str = __in.substr( 0,pos );
   if ( !ParseIP( str,__out.match ) )
@@ -92,7 +101,7 @@ ParsePair( std::string const & __in,SModIP & __out )
 }
 
 bool
-ParsePair( std::string const & __in,SModStr & __out )
+_SplitBySym( char const * __prefix,std::string const & __in,std::string & __out1,std::string & __out2 )
 {
  bool ret = {};
 
@@ -100,7 +109,7 @@ ParsePair( std::string const & __in,SModStr & __out )
  {
   if ( __in.empty() )
   {
-   EOUT( "empty string subst" );
+   EOUT( "empty " << __prefix << " subst" );
    break;
   }
 
@@ -114,18 +123,18 @@ ParsePair( std::string const & __in,SModStr & __out )
   auto const posmid = __in.find( delim,1 );
   if ( posmid == std::string::npos )
   {
-   EOUT( "empty string delimiter lost" );
+   EOUT( "empty " << __prefix << " delimiter lost" );
    break;
   }
 
-  __out.match  = __in.substr( 1,posmid - 1 );
-  if ( __out.match.empty() )
+  __out1  = __in.substr( 1,posmid - 1 );
+  if ( __out1.empty() )
   {
-   EOUT( "empty string match" );
+   EOUT( "empty " << __prefix << " match" );
    break;
   }
 
-  __out.target = __in.substr( posmid + 1,__in.length() - 2 - posmid );
+  __out2 = __in.substr( posmid + 1,__in.length() - 2 - posmid );
 
   ret = true;
  } while ( 0 );
@@ -133,17 +142,130 @@ ParsePair( std::string const & __in,SModStr & __out )
  return ret;
 }
 
-template<>
 bool
-TValSubst< uint32_t >
-::Apply( uint32_t & __ ) const
+ParsePair( std::string const & __in,SModSTR & __out )
+{
+ return _SplitBySym( "string",__in,__out.match,__out.target );
+}
+
+bool
+_ReadMAC( std::string const & __src, mac_t & __out )
+{
+ unsigned bnum    = {};
+ uint8_t  byte    = {};
+ unsigned symnum  = {};
+
+ auto const bytefill
+ =
+ [&]( uint8_t val ) -> bool
+ {
+  bool ret = {};
+
+  do
+  {
+   if ( symnum > 1 ) break;
+
+   if ( !symnum ) byte = val;
+   else
+   {
+    byte <<= 4;
+    byte |= val;
+   }
+
+   ++symnum;
+   ret = true;
+  } while ( 0 );
+
+  return ret;
+ };
+
+ auto const bytestore
+ =
+ [&]( void ) -> bool
+ {
+  if ( bnum < 6 )
+  {
+   __out[ bnum++ ] = byte;
+   return true;
+  }
+
+  return false;
+ };
+
+ for ( char ch : __src )
+ {
+  switch ( ch )
+  {
+   default:
+    break;
+
+   case ':':
+    bytestore();
+    symnum = 0;
+    continue;
+
+   case '0' ... '9':
+    if ( bytefill( ch - '0' ) ) continue;
+    break;
+
+   case 'a' ... 'f':
+    if ( bytefill( ch - 'a' + 0xa ) ) continue;
+    break;
+
+   case 'A' ... 'F':
+    if ( bytefill( ch - 'A' + 0xa ) ) continue;
+    break;
+  } /* switch ( ch ) */
+
+  symnum = 0;
+  break;
+ }
+
+ if ( symnum ) bytestore();
+
+ return bnum == 6;
+}
+
+bool
+ParsePair( std::string const & __in,SModMAC & __out )
+{
+ bool ret = {};
+
+ do
+ {
+  std::string strmatch;
+  std::string strtarget;
+
+  if ( !_SplitBySym( "string",__in,strmatch,strtarget ) ) break;
+
+  if ( !_ReadMAC( strmatch,__out.match) )
+  {
+   EOUT( "match MAC expected" );
+   break;
+  }
+
+  if ( !_ReadMAC( strtarget,__out.target) )
+  {
+   EOUT( "target MAC expected" );
+   break;
+  }
+
+  ret = true;
+ } while ( 0 );
+
+ return ret;
+}
+
+template< typename TVAL >
+bool
+TValSubst< TVAL >
+::Apply( TVAL & __ ) const
 {
  if ( this->match != __ ) return false;
 
  __ = this->target;
  return true;
 }
-
 
 template<>
 bool
@@ -195,8 +317,9 @@ int main( int __q, char ** __p )
   std::string fnameout   = "modified.cap";
   bool        tsact      = {};
 
-  std::list<SModIP>  ipsubst;
-  std::list<SModStr> strsubst;
+  std::list< SModIP >  ipsubst;
+  std::list< SModSTR > strsubst;
+  std::list< SModMAC > ethsubst;
 
   auto FPathOutParse
   =
@@ -235,6 +358,14 @@ int main( int __q, char ** __p )
      pch = {}; // ошибка
      break;
 
+    case 'm' :
+     if ( ParsePair( ++pch,(ethsubst.emplace_back(),ethsubst.back()) ) ) break;
+     pch = {}; // ошибка
+     break;
+
+    case 'i' :
+     ++pch;
+     // [[fallthrough]]
     case '0'...'9' :
      if ( ParsePair( pch,(ipsubst.emplace_back(),ipsubst.back()) ) ) break;
      pch = {}; // ошибка
@@ -332,13 +463,12 @@ int main( int __q, char ** __p )
 
    for ( ;; )
    {
-    if ( ipsubst.empty() && strsubst.empty() ) break;
+    if ( strsubst.empty() ) break;
 
     pcpp::Packet parsedPacket( &rawPacket );
 
     switch ( 0 ) default:
     {
-     if ( strsubst.empty() ) break;
      auto * const pudp = parsedPacket.getLayerOfType<pcpp::UdpLayer>();
 
      if ( !pudp ) break;
@@ -414,6 +544,15 @@ int main( int __q, char ** __p )
       }
 
      } /* IPv4 layer */
+
+    if ( !ethsubst.empty() )
+     if ( auto * const peth = parsedPacket.getLayerOfType<pcpp::EthLayer>() )
+     {
+      auto * const pethhdr = peth->getEthHeader();
+
+      if ( ApplyFunc( ethsubst,*reinterpret_cast<mac_t*>( pethhdr->srcMac ) ) ) ismatched = true;
+      if ( ApplyFunc( ethsubst,*reinterpret_cast<mac_t*>( pethhdr->dstMac ) ) ) ismatched = true;
+     }
 
     break;
    } /* for modify */
