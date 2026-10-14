@@ -1,17 +1,17 @@
 /*! @file    ipchange.cpp
  *  @author  xxxxxxxxxxxxxxxxxxxxxxxxxx (mailto:xxxxxx@mail.ru)
  *  @ingroup
- *  @brief   Подмена IP в cap-файле
+ *  @brief   Подмена IP,MAC и строк в cap-файле
  *
  *  Time-stamp: <>
  *  Time-stamp: <2026/10/13 11:44 agulevich> начало
  *
  *  Сборка:
- *   g++ ipchange.cpp -o ipchange -I${HOME}/killme/PcapPlusPlus/{Packet++,Common++,Pcap++}/header ${HOME}/killme/PcapPlusPlus/{Packet++,Common++,Pcap++}/*.a -lpcap
+ *   ./make.sh
  *   https://pcapplusplus.github.io/v1904/Documentation/a01382.html
  *
  *  Для преобразования pcapng в pcap:
- *   $ tshark -r capture.pcapng -F pcap -w capture.pcap
+ *   $ tshark -r capture.pcapng -F xpbcap -w capture.pcap
  *
  *  Запуск:
  *   ./ipchange /tmp/in.cap -o -t /tmp/out.cap 10.10.43.4:172.18.12.12 's~8634423301~801~' 's~8634663302~802~' 's~10.10.43.4~172.18.12.12~' 'm~00:30:64:3b:04:a7~ff:ff:ff:ff:ff:ff~'
@@ -307,7 +307,7 @@ int main( int __q, char ** __p )
  {
   if ( __q < 2 )
   {
-   EOUT( "expected: " << __p[0] << " {FPATHIN} [-o {FPATHOUT}] [-t] [{IP:SUBST} ...] [{s~STR:SUBST~} ...]" );
+   EOUT( "expected: " << __p[0] << " {FPATHIN} [-o {FPATHOUT}] [-t] [{IP:SUBST} ...] [{s~STR~SUBST~} ...] [{m~MAC~SUBST~~}]" );
    break;
   }
 
