@@ -1,10 +1,19 @@
 #! /bin/bash
+#
+# @file    pcapsplit.sh
+# @author  xxxxxxxxxxxxxxxxxxxxxxxxxx (mailto:xxxxxx@mail.ru)
+# @ingroup
+# @brief   Разделение pcap-файла на части
+#
+# Time-stamp: <>
+# Time-stamp: <2026/10/12 10:02 agulevich> начало
 
 die()
 {
  echo "$@" >&2
  exit 1
 }
+
 
 editcap -t 460050000 --discard-packet-comments /tmp/gud_in1.cap /tmp/gud_out1.cap
 

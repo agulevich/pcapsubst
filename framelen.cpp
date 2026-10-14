@@ -1,5 +1,5 @@
 /*! @file    framelen.cpp
- *  @author  xxxxxxx xxxxxxxxx xxxxxxxx (mailto:xxxxxx@mail.ru)
+ *  @author  xxxxxxxxxxxxxxxxxxxxxxxxxx (mailto:xxxxxx@mail.ru)
  *  @ingroup
  *  @brief   Модификация длины заголовков pcap
  *
