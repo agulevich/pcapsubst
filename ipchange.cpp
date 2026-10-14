@@ -14,7 +14,7 @@
  *   $ tshark -r capture.pcapng -F xpbcap -w capture.pcap
  *
  *  Запуск:
- *   ./ipchange /tmp/in.cap -o -t /tmp/out.cap 10.10.43.4:172.18.12.12 's~8634423301~801~' 's~8634663302~802~' 's~10.10.43.4~172.18.12.12~' 'm~00:30:64:3b:04:a7~ff:ff:ff:ff:ff:ff~'
+ *   ./ipchange /tmp/in.cap -t -o /tmp/out.cap 10.10.43.4:172.18.12.12 's~8634423301~801~' 's~8634663302~802~' 's~10.10.43.4~172.18.12.12~' 'm~00:30:64:3b:04:a7~ff:ff:ff:ff:ff:ff~'
  */
 
 // PcapPlusPlus
@@ -53,9 +53,9 @@ struct TValSubst
  bool Apply( val_t & SUBJ ) const;
 }; /* struct TValSubst */
 
-using SModIP  = TValSubst< uint32_t >;   /*!< @brief Замена IP */
-using SModSTR = TValSubst< std::string >;/*!< @brief Замена строки */
-using SModMAC = TValSubst< mac_t >;   /*!< @brief Замена MAC */
+using SModIP  = TValSubst< uint32_t >;    /*!< @brief Замена IP */
+using SModSTR = TValSubst< std::string >; /*!< @brief Замена строки */
+using SModMAC = TValSubst< mac_t >;       /*!< @brief Замена MAC */
 
 bool
 ParseIP( std::string const __in,uint32_t & __out )
