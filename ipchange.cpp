@@ -1,5 +1,5 @@
 /*! @file    ipchange.cpp
- *  @author  xxxxxxxxxxxxxxxxxxxxxxxxxx (mailto:xxxxxx@mail.ru)
+ *  @author  Гулевич Александр Игоревич (mailto:alx_me@mail.ru)
  *  @ingroup
  *  @brief   Подмена IP в cap-файле
  *
@@ -12,6 +12,9 @@
  *
  *  Для преобразования pcapng в pcap:
  *   $ tshark -r capture.pcapng -F pcap -w capture.pcap
+ *
+ *  Запуск:
+ *   ./ipchange /tmp/in.cap -o -t /tmp/out.cap 10.10.43.4:172.18.12.12 's~8634423301~801~' 's~8634663302~802~' 's~10.10.43.4~172.18.12.12~'
  */
 
 // PcapPlusPlus
@@ -95,18 +98,34 @@ ParsePair( std::string const & __in,SModStr & __out )
 
  do
  {
+  if ( __in.empty() )
+  {
+   EOUT( "empty string subst" );
+   break;
+  }
 
-  auto const posmid = __in.find( '~' );
-  if ( *__in.rbegin() != '~' )
+  char const delim   = __in[0];
+  if ( *__in.rbegin() != delim )
   {
    EOUT( "unexpected format" );
    break;
   }
 
-  __out.match  = __in.substr( 0,posmid );
-  __out.target = __in.substr( posmid + 1,__in.length() - 2 - posmid );
+  auto const posmid = __in.find( delim,1 );
+  if ( posmid == std::string::npos )
+  {
+   EOUT( "empty string delimiter lost" );
+   break;
+  }
 
-  if ( __out.match.empty() ) break;
+  __out.match  = __in.substr( 1,posmid - 1 );
+  if ( __out.match.empty() )
+  {
+   EOUT( "empty string match" );
+   break;
+  }
+
+  __out.target = __in.substr( posmid + 1,__in.length() - 2 - posmid );
 
   ret = true;
  } while ( 0 );
@@ -131,11 +150,20 @@ bool
 TValSubst< std::string >
 ::Apply( std::string & __ ) const
 {
- size_t const pos = __.find( this->match );
- if ( pos == std::string::npos ) return false;
+ bool   ret = {};
 
- __.replace( pos,this->match.length(),this->target );
- return true;
+ auto const tlen = this->target.length();
+ for ( size_t pos = {} ;; )
+ {
+  pos = __.find( this->match,pos );
+  if ( pos == std::string::npos ) break;
+
+  __.replace( pos,this->match.length(),this->target );
+  pos += tlen;
+
+  ret = true;
+ } /* for */
+ return ret;
 }
 
 template< typename TLIST >
@@ -157,7 +185,7 @@ int main( int __q, char ** __p )
  {
   if ( __q < 2 )
   {
-   EOUT( "expected: " << __p[0] << " {FPATHIN} [-o {FPATHOUT}] [-t] {IP:SUBST} [{IP:SUBST}...]" );
+   EOUT( "expected: " << __p[0] << " {FPATHIN} [-o {FPATHOUT}] [-t] [{IP:SUBST} ...] [{s~STR:SUBST~} ...]" );
    break;
   }
 
@@ -198,10 +226,11 @@ int main( int __q, char ** __p )
    switch ( (ch = *pch) )
    {
     default:
+     EOUT( "unexpected ARGV: \"" << pch << '"' );
      pch = {}; // ошибка
      break;
 
-    case '~' :
+    case 's' :
      if ( ParsePair( ++pch,(strsubst.emplace_back(),strsubst.back()) ) ) break;
      pch = {}; // ошибка
      break;
@@ -279,8 +308,9 @@ int main( int __q, char ** __p )
   unsigned          ploadsize;
   std::string       pload;
   int               rawdelta     = {};
+  unsigned          packetnumber = {};
 
-  for ( i = 0 ; reader.getNextPacket(rawPacket) ; ++i )
+  for ( packetnumber = 0 ; reader.getNextPacket(rawPacket) ; ++packetnumber )
   {
    if ( !deltasec )
    {
@@ -355,11 +385,16 @@ int main( int __q, char ** __p )
      }
 
     // длина изменилась - всё нужно пересчитать
-     DOUT( "SPORT: " << pudp->getSrcPort() << ", DPORT: " << pudp->getDstPort() << ", ploaddelta: " << rawdelta  );
+     DOUT( "pnum: " << packetnumber << ", ploaddelta: " << rawdelta );
 
-     rawPacket.reallocateData( rawPacket.getFrameLength() + rawdelta );
-     uint8_t const buff[ rawdelta ] = {};
-     rawPacket.appendData( buff,sizeof(buff) );
+     //     rawPacket.reallocateData( rawPacket.getFrameLength() + rawdelta );
+
+     if ( rawdelta < 0 ) rawPacket.removeData( rawPacket.getRawDataLen() + rawdelta,(unsigned)-rawdelta );
+     else
+     {
+      uint8_t const buff[ rawdelta ] = {};
+      rawPacket.appendData( buff,sizeof(buff) );
+     }
 
      continue; // rawdelta стал знаком того, что нужно пересчитать все поля
     } /* switch ( 0 ) default: */
@@ -391,7 +426,7 @@ int main( int __q, char ** __p )
   // закрыть файл
   reader.close();
 
-  DOUT( "done\ntotal count: " << i );
+  DOUT( "done\ntotal count: " << packetnumber );
   if ( !ipsubst.empty() )
    DOUT( "matched: " << matchedcount );
 
